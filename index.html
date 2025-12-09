@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reo Ai 🌟</title>
+    <style>
+        /* CSS لـ Dark Mode */
+        :root {
+            --bg-color: #1e1e1e;
+            --container-bg: #2d2d2d;
+            --header-bg: #0088cc; /* أزرق تلجرام */
+            --text-color: #f0f0f0;
+            --input-bg: #3c3c3c;
+            --input-border: #555;
+            --user-bubble: #007bff; /* أزرق */
+            --ai-bubble: #444;
+            --button-bg: #0088cc;
+            --button-hover: #0099e6;
+            --disabled-bg: #555;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            color: var(--text-color);
+        }
+        .chat-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background-color: var(--container-bg);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+        }
+        .chat-header {
+            background-color: var(--header-bg);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-size: 1.3em;
+            font-weight: bold;
+        }
+        .chat-messages {
+            flex-grow: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .message {
+            max-width: 80%;
+            padding: 12px;
+            border-radius: 18px;
+            line-height: 1.6;
+            word-wrap: break-word;
+        }
+        .user-message {
+            background-color: var(--user-bubble);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 4px;
+        }
+        .ai-message {
+            background-color: var(--ai-bubble);
+            color: var(--text-color);
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        .chat-input {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #444;
+            background-color: var(--container-bg);
+        }
+        .chat-input input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid var(--input-border);
+            border-radius: 20px;
+            margin-left: 10px;
+            font-size: 1em;
+            background-color: var(--input-bg);
+            color: var(--text-color);
+        }
+        .chat-input button {
+            background-color: var(--button-bg);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .chat-input button:hover:not(:disabled) {
+            background-color: var(--button-hover);
+        }
+        .chat-input button:disabled {
+            background-color: var(--disabled-bg);
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">Reo Ai 🌟</div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="message ai-message">
+                👋 أهلاً وسهلاً بك في <b>Reo✨</b>!
+                <br>- هنا المكان المناسب لأسئلتك واستفساراتك في أي وقت 🎯 
+                <br>- كل ما تحتاجه من معلومات وإجابات في مكان واحد وبأسلوب بسيط وسريع ⚡
+                <br>- أرسل سؤالك الآن ! 💬
+            </div>
+        </div>
+
+        <div class="chat-input">
+            <input type="text" id="messageInput" placeholder="اكتب سؤالك هنا..." autofocus>
+            <button id="sendButton" onclick="sendMessage()">إرسال</button>
+        </div>
+    </div>
+
+    <script>
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const chatMessages = document.getElementById('chatMessages');
+
+        /* مؤشر الكتابة */
+        let typingIndicator;
+
+        function showTyping() {
+            typingIndicator = document.createElement('div');
+            typingIndicator.classList.add('message', 'ai-message');
+            typingIndicator.id = 'typing';
+            typingIndicator.innerHTML = '✍️ Reo يكتب الآن...';
+            chatMessages.appendChild(typingIndicator);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function hideTyping() {
+            const t = document.getElementById('typing');
+            if (t) t.remove();
+        }
+
+        function appendMessage(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', sender === 'user' ? 'user-message' : 'ai-message');
+            messageDiv.innerHTML = text;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            appendMessage(message, 'user');
+            messageInput.value = '';
+            sendButton.disabled = true;
+            messageInput.disabled = true;
+
+            showTyping();
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+
+                if (!response.ok) throw new Error('Server error');
+
+                const data = await response.json();
+
+                hideTyping();
+                appendMessage(data.response, 'ai');
+
+            } catch (error) {
+                hideTyping();
+                appendMessage('حدث خطأ في الاتصال بالخادم.', 'ai');
+            } finally {
+                sendButton.disabled = false;
+                messageInput.disabled = false;
+                messageInput.focus();
+            }
+        }
+
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+  </html>
