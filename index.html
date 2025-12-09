@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Mini App</title>
+    <style>
+        /* CSS بسيط لتنظيم شكل الدردشة */
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .chat-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .chat-header {
+            background-color: #0088cc;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-size: 1.2em;
+        }
+        .chat-messages {
+            flex-grow: 1;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .message {
+            max-width: 80%;
+            padding: 10px;
+            border-radius: 15px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+        .user-message {
+            background-color: #dcf8c6;
+            align-self: flex-end;
+        }
+        .ai-message {
+            background-color: #eee;
+            align-self: flex-start;
+        }
+        .chat-input {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #ddd;
+            background-color: #fff;
+        }
+        .chat-input input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 20px;
+            margin-left: 10px;
+            font-size: 1em;
+        }
+        .chat-input button {
+            background-color: #0088cc;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .chat-input button:hover:not(:disabled) {
+            background-color: #006699;
+        }
+        .chat-input button:disabled {
+            background-color: #a0a0a0;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">تطبيق الذكاء الاصطناعي (Gemini)</div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="message ai-message">مرحباً! أنا نموذج ذكاء اصطناعي، كيف يمكنني مساعدتك اليوم؟</div>
+        </div>
+        <div class="chat-input">
+            <input type="text" id="messageInput" placeholder="اكتب رسالتك..." autofocus>
+            <button id="sendButton" onclick="sendMessage()">إرسال</button>
+        </div>
+    </div>
+
+    <script>
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const chatMessages = document.getElementById('chatMessages');
+        
+        // دالة لإضافة رسالة إلى واجهة الدردشة
+        function appendMessage(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            messageDiv.classList.add(sender === 'user' ? 'user-message' : 'ai-message');
+            messageDiv.textContent = text;
+            chatMessages.appendChild(messageDiv);
+            // التمرير التلقائي لأسفل
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // دالة إرسال الرسالة إلى السيرفر الخلفي
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            // 1. عرض رسالة المستخدم وتعطيل الإدخال
+            appendMessage(message, 'user');
+            messageInput.value = '';
+            sendButton.disabled = true;
+            messageInput.disabled = true;
+
+            try {
+                // 2. إرسال طلب POST إلى نقطة النهاية (السيرفر الخلفي)
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Server responded with an error or API key is invalid.');
+                }
+
+                const data = await response.json();
+                
+                // 3. عرض رد الذكاء الاصطناعي
+                appendMessage(data.response, 'ai');
+
+            } catch (error) {
+                console.error('Error sending message:', error);
+                appendMessage('عذراً، حدث خطأ في الاتصال بالنموذج. تأكد من مفتاح Gemini API.', 'ai');
+            } finally {
+                // 4. تفعيل الإدخال
+                sendButton.disabled = false;
+                messageInput.disabled = false;
+                messageInput.focus();
+            }
+        }
+
+        // إتاحة الإرسال بضغط Enter
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+      </html>
