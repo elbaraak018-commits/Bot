@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TikPro Downloader</title>
+
+<style>
+:root{
+    --bg:#0a0a0a;
+    --card:#161616;
+    --accent:#800020;
+    --text:#fff;
+    --dim:#b3b3b3;
+    --success:#28a745;
+    --purple:#6f42c1;
+    --error:#dc3545;
+}
+
+/* ===== Splash Screen ===== */
+#splash{
+    position:fixed;
+    inset:0;
+    background:var(--bg);
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    z-index:9999;
+    animation:fadeOut 1s ease forwards;
+    animation-delay:4.5s;
+}
+
+/* الاسم يظهر بعد Powered by */
+.splash-title{
+    font-size:42px;
+    color:#fff;
+    font-weight:700;
+    letter-spacing:2px;
+    opacity:0;
+    animation:showTitle 1.5s ease forwards;
+    animation-delay:1.4s;
+    margin-bottom:8px; /* الاسم فوق Powered by */
+}
+
+/* Powered by يظهر أولًا */
+.splash-sub{
+    font-size:15px;
+    color:var(--accent);
+    letter-spacing:1px;
+    opacity:0;
+    animation:showSub 1.2s ease forwards;
+}
+
+/* Animations */
+@keyframes showSub{
+    from{opacity:0;transform:translateY(12px)}
+    to{opacity:1;transform:translateY(0)}
+}
+
+@keyframes showTitle{
+    from{opacity:0;transform:scale(0.85)}
+    to{opacity:1;transform:scale(1)}
+}
+
+@keyframes fadeOut{
+    to{opacity:0;visibility:hidden}
+}
+
+/* ===== Main App ===== */
+*{box-sizing:border-box;font-family:'Segoe UI',Tahoma}
+
+body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    display:flex;
+    justify-content:center;
+    padding:20px;
+}
+
+.container{
+    width:100%;
+    max-width:420px;
+    text-align:center;
+    opacity:0;
+    animation:appShow 1s ease forwards;
+    animation-delay:5s;
+}
+
+@keyframes appShow{
+    to{opacity:1}
+}
+
+h1{
+    font-size:34px;
+    background:linear-gradient(to bottom,#fff,var(--accent));
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+}
+
+.card{
+    background:var(--card);
+    padding:25px;
+    border-radius:25px;
+    box-shadow:0 15px 40px rgba(0,0,0,.6);
+}
+
+input{
+    width:100%;
+    padding:15px;
+    border-radius:12px;
+    border:2px solid transparent;
+    background:#222;
+    color:#fff;
+    outline:none;
+    text-align:center;
+}
+input:focus{border-color:var(--accent)}
+
+button{
+    width:100%;
+    margin-top:15px;
+    padding:15px;
+    border:none;
+    border-radius:12px;
+    background:var(--accent);
+    color:#fff;
+    font-size:16px;
+    font-weight:bold;
+    cursor:pointer;
+}
+button:disabled{opacity:.5}
+
+.loader{
+    margin:20px auto;
+    width:32px;
+    height:32px;
+    border:4px solid #333;
+    border-top:4px solid var(--accent);
+    border-radius:50%;
+    animation:spin 1s linear infinite;
+    display:none;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.message{
+    margin-top:15px;
+    padding:12px;
+    border-radius:12px;
+    display:none;
+}
+.error{background:var(--error)}
+
+#result{
+    display:none;
+    margin-top:20px;
+}
+img{
+    width:100%;
+    border-radius:15px;
+    margin-bottom:15px;
+}
+
+.actions a{
+    display:block;
+    padding:12px;
+    border-radius:10px;
+    margin-bottom:10px;
+    color:#fff;
+    text-decoration:none;
+    font-weight:bold;
+}
+.hd{background:var(--success)}
+.sd{background:#17a2b8}
+.mp3{background:var(--purple)}
+.share{background:#444}
+</style>
+</head>
+
+<body>
+
+<!-- Splash Screen -->
+<div id="splash">
+    <div class="splash-title">𝙰𝚕-𝚋𝚊𝚛𝚊𝚊</div>
+    <div class="splash-sub">Powered by</div>
+</div>
+
+<!-- Main App -->
+<div class="container">
+    <h1>TIK PRO</h1>
+    <p style="color:var(--dim)">أدخل رابط فيديو تيك توك</p>
+
+    <div class="card">
+        <input id="url" placeholder="https://vm.tiktok.com/..." />
+        <button id="btn" onclick="getVideo()">استخراج الفيديو</button>
+    </div>
+
+    <div class="loader" id="loader"></div>
+    <div class="message error" id="msg"></div>
+
+    <div id="result" class="card">
+        <p id="title"></p>
+        <img id="thumb">
+
+        <div class="actions">
+            <a id="hd" class="hd" download>تحميل HD</a>
+            <a id="sd" class="sd" download>تحميل SD</a>
+            <a id="mp3" class="mp3" download>تحميل الصوت MP3</a>
+            <a class="share" onclick="shareLink()">مشاركة الرابط</a>
+        </div>
+    </div>
+</div>
+
+<script>
+const urlInput=document.getElementById("url");
+const loader=document.getElementById("loader");
+const msg=document.getElementById("msg");
+const btn=document.getElementById("btn");
+
+urlInput.value=localStorage.getItem("lastUrl")||"";
+
+async function getVideo(){
+    msg.style.display="none";
+    if(!navigator.onLine){showError("لا يوجد اتصال بالإنترنت");return;}
+
+    const url=urlInput.value.trim();
+    if(!url){showError("يرجى إدخال الرابط");return;}
+
+    localStorage.setItem("lastUrl",url);
+    btn.disabled=true;
+    loader.style.display="block";
+
+    try{
+        const r=await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
+        const j=await r.json();
+        if(j.code!==0) throw 0;
+
+        result.style.display="block";
+        title.innerText=j.data.title||"TikTok Video";
+        thumb.src=j.data.cover;
+        hd.href=j.data.hdplay;
+        sd.href=j.data.play;
+        mp3.href=j.data.music;
+
+    }catch{
+        showError("تعذر جلب الفيديو");
+    }
+
+    loader.style.display="none";
+    btn.disabled=false;
+}
+
+function showError(t){
+    msg.innerText=t;
+    msg.style.display="block";
+}
+
+function shareLink(){
+    navigator.share
+        ? navigator.share({text:"TikPro Downloader",url:urlInput.value})
+        : navigator.clipboard.writeText(urlInput.value);
+}
+</script>
+
+</body>
+  </html>
