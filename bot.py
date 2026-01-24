@@ -1,96 +1,57 @@
 import os
-import telebot
-import requests
-import datetime
+import logging
 import time
-from flask import Flask, request
+import datetime
+import requests
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# --- الإعدادات ---
-TOKEN = os.environ.get('BOT_TOKEN')
-URL = os.environ.get('SERVER_URL')
-APIFY_TOKEN = os.environ.get('APIFY_TOKEN')
+# 1. إعدادات السجلات (Logging)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-bot = telebot.TeleBot(TOKEN)
-app = Flask(__name__)
+# 2. جلب المتغيرات
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+APIFY_TOKEN = os.getenv("APIFY_TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL") # رابط موقعك على ريندر
 
-# دالة تعيين الـ Webhook بأمان
-def set_webhook_safe():
-    webhook_url = f"{URL}/{TOKEN}"
-    try:
-        # فحص الحالة الحالية قبل التغيير لتجنب خطأ 429
-        current_info = bot.get_webhook_info()
-        if current_info.url != webhook_url:
-            bot.remove_webhook()
-            time.sleep(1)
-            bot.set_webhook(url=webhook_url)
-            print(f"✅ Webhook set successfully")
-    except Exception as e:
-        print(f"⚠️ Webhook Error: {e}")
-
-# دالة حساب تاريخ إنشاء الحساب تقريبياً
+# 3. دوال مساعدة
 def get_creation_date(user_id):
     try:
         binary_id = bin(int(user_id))[2:].zfill(64)
         timestamp = int(binary_id[:31], 2)
         return datetime.datetime.fromtimestamp(timestamp).strftime('%Y-%m-%d %H:%M:%S')
-    except:
-        return "N/A"
+    except: return "N/A"
 
-# جلب البيانات من Apify
-def fetch_tiktok_data(username):
+async def fetch_tiktok_data(username):
+    # استخدام Actor: clockworks/tiktok-scraper
     api_url = f"https://api.apify.com/v2/acts/clockworks~tiktok-scraper/run-sync-get-dataset-items?token={APIFY_TOKEN}"
-    payload = {
-        "usernames": [username],
-        "resultsPerPage": 1,
-        "shouldDownloadVideos": False
-    }
+    payload = {"usernames": [username], "resultsPerPage": 1, "shouldDownloadVideos": False}
     try:
         response = requests.post(api_url, json=payload, timeout=60)
         if response.status_code in [200, 201]:
             data = response.json()
             return data[0] if data else None
-    except:
-        return None
+    except Exception as e:
+        logger.error(f"Apify Error: {e}")
     return None
 
-# --- المسارات (Routes) ---
-
-@app.route('/' + TOKEN, methods=['POST'])
-def getMessage():
-    if request.headers.get('content-type') == 'application/json':
-        json_string = request.get_data().decode('utf-8')
-        update = telebot.types.Update.de_json(json_string)
-        bot.process_new_updates([update])
-        return "!", 200
-    return "Forbidden", 403
-
-@app.route("/")
-def index():
-    return "Bot is Online!", 200
-
-# --- الأوامر (Handlers) ---
-
-# 1. رسالة الترحيب (يجب أن تكون في البداية)
-@bot.message_handler(commands=['start'])
-def send_welcome(message):
+# 4. معالجات الأوامر (Handlers)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_text = (
-        "👋 أهلاً بك في بوت استخراج معلومات تيك توك!\n\n"
-        "🔍 فقط أرسل لي **اسم المستخدم (Username)** وسأقوم بجلب كافة التفاصيل لك.\n\n"
+        "👋 **أهلاً بك في بوت معلومات تيك توك المطور!**\n\n"
+        "🔍 أرسل اسم المستخدم (Username) فقط وسأجلب لك التفاصيل.\n\n"
         "Powered by @Albaraa_1"
     )
-    bot.reply_to(message, welcome_text, parse_mode="Markdown")
+    await update.message.reply_text(welcome_text, parse_mode='Markdown')
 
-# 2. معالج الرسائل النصية (البحث)
-@bot.message_handler(func=lambda message: True)
-def handle_tiktok_search(message):
-    username = message.text.replace('@', '').strip()
-    
-    # تجاهل الأوامر الأخرى
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    username = update.message.text.replace('@', '').strip()
     if username.startswith('/'): return
 
-    wait_msg = bot.reply_to(message, "⏳ جارٍ جلب البيانات من تيك توك... انتظر قليلاً.")
+    status_msg = await update.message.reply_text("⏳ جارٍ استخراج البيانات من Apify...")
     
-    user_data = fetch_tiktok_data(username)
+    user_data = await fetch_tiktok_data(username)
     
     if user_data:
         author = user_data.get('authorMeta', {})
@@ -105,15 +66,35 @@ def handle_tiktok_search(message):
             f"❤️ **الإعجابات:** {author.get('heart'):,}\n"
             f"🎬 **الفيديوهات:** {author.get('video')}\n"
             f"📅 **تاريخ الإنشاء:** {get_creation_date(user_id)}\n"
-            f"🌍 **الدولة:** {author.get('region', 'N/A')}\n"
-            f"🔒 **حساب خاص:** {'نعم ✅' if author.get('private') else 'لا ❌'}\n"
-            f"📜 **السيرة:** {author.get('signature', 'لا توجد')}\n\n"
+            f"🌍 **الدولة:** {author.get('region', 'N/A')}\n\n"
             f"Powered by @Albaraa_1"
         )
-        bot.edit_message_text(caption, message.chat.id, wait_msg.message_id, parse_mode="Markdown")
+        await status_msg.edit_text(caption, parse_mode='Markdown')
     else:
-        bot.edit_message_text("❌ فشل جلب البيانات. تأكد من اليوزر أو رصيد Apify.\n\nPowered by @Albaraa_1", message.chat.id, wait_msg.message_id)
+        await status_msg.edit_text("❌ فشل جلب البيانات. تأكد من اليوزر أو رصيد Apify.\n\nPowered by @Albaraa_1")
+
+# 5. التشغيل الرئيسي (Main)
+def main():
+    if not BOT_TOKEN:
+        logger.critical("BOT_TOKEN missing!")
+        return
+
+    app = Application.builder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    if WEBHOOK_URL:
+        PORT = int(os.environ.get("PORT", 8443))
+        # المكتبة ستقوم بكل العمل نيابة عنك هنا
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=BOT_TOKEN,
+            webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}"
+        )
+    else:
+        app.run_polling()
 
 if __name__ == "__main__":
-    set_webhook_safe()
-    app.run(host="0.0.0.0", port=int(os.environ.get('PORT', 5000)))
+    main()
