@@ -1,3 +1,5 @@
 python-telegram-bot[webhooks]
-requests
 httpx
+beautifulsoup4
+python-dotenv
+ujson
